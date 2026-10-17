@@ -57,6 +57,43 @@
     background: #8fd3ff;
   }
   canvas { display: block; width: 100%; height: 100%; }
+  [hidden] { display: none !important; }
+  #fireBtn {
+    position: absolute;
+    right: 3%;
+    bottom: 3%;
+    opacity: .88;
+    width: clamp(56px, 10%, 96px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,.9);
+    background: rgba(255, 90, 160, .35);
+    color: #fff;
+    font: inherit;
+    font-weight: 800;
+    font-size: clamp(11px, 1.6vw, 16px);
+    line-height: 1.15;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: pointer;
+    touch-action: none;
+    text-shadow: 0 2px 3px rgba(0,0,0,.4);
+    box-shadow: 0 4px 14px rgba(0,0,0,.3);
+  }
+  #fireBtn .fill {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: linear-gradient(#ff9ad5, #ff4f9a);
+    z-index: 0;
+  }
+  #fireBtn span { position: relative; z-index: 1; }
+  #fireBtn span.big { font-size: 1.7em; }
+  #fireBtn.ready { animation: glow 1s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow: 0 0 22px 6px rgba(255,120,200,.85); } }
+  #fireBtn:active { transform: scale(.94); }
   .overlay {
     position: absolute;
     inset: 0;
@@ -129,15 +166,21 @@
 
 <div id="wrap">
   <canvas id="game"></canvas>
+  <button id="fireBtn" hidden aria-label="아빠 존경 파워 발사">
+    <div class="fill" id="fireFill"></div>
+    <span class="big">💖</span><span>존경 파워</span>
+  </button>
 
   <div class="overlay show" id="titleScreen">
     <img src="full.png" alt="화이팅 하는 쌍똥이" class="bounce">
     <h1>쌍똥이의 아빠 찾아 삼만리</h1>
     <p>쌍똥이가 아빠를 만나러 가요!<br>
       웅덩이, 강아지, 비구름, 깜깜한 숲속 박쥐까지…<br>
-      온갖 어려움을 이겨내고 아빠에게 달려가세요!</p>
+      온갖 어려움을 이겨내고 아빠에게 달려가세요!<br>
+      막히면 <b>아빠 존경 파워</b>로 뿅! 💖</p>
     <button class="btn" id="startBtn">출발! 🏃</button>
     <p class="small" style="margin-top:.8em">점프: 화면 탭 · 스페이스 · ↑ &nbsp;|&nbsp; 공중에서 한 번 더 = 2단 점프<br>
+      💖 아빠 존경 파워 발사: 오른쪽 아래 버튼 · X 키 → 적을 물리쳐요!<br>
       ⭐ 별 모으기 · ❤️ 생명 +1 · 🍭 무적 사탕</p>
     <p class="small" id="bestText"></p>
   </div>
@@ -304,6 +347,8 @@
     heart: () => [523, 659, 784].forEach((f, i) => beep(f, 0.12, 'triangle', 0.05, 0, i * 0.08)),
     power: () => [523, 659, 784, 1047, 1319].forEach((f, i) => beep(f, 0.1, 'square', 0.035, 0, i * 0.06)),
     smash: () => beep(300, 0.12, 'square', 0.05, 900),
+    fire: () => { beep(880, 0.25, 'sawtooth', 0.035, 220); beep(1320, 0.18, 'triangle', 0.04, 1760, 0.02); },
+    boom: () => { beep(160, 0.3, 'square', 0.05, 60); beep(990, 0.15, 'triangle', 0.04, 0, 0.05); },
     clear: () => [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.18, 'triangle', 0.06, 0, i * 0.13)),
     win: () => [523, 523, 659, 784, 659, 784, 1047].forEach((f, i) => beep(f, 0.2, 'triangle', 0.06, 0, i * 0.15)),
     over: () => [392, 330, 262].forEach((f, i) => beep(f, 0.25, 'triangle', 0.06, 0, i * 0.2)),
@@ -322,6 +367,8 @@
   let nextObs = 0;
   let obstacles = [], items = [], particles = [], texts = [], raindrops = [];
   let goal = null, hugTimer = 0, shake = 0;
+  let energy = 100, shots = [], shotCount = 0;
+  const SHOT_COST = 25, ENERGY_REGEN = 11;
   let time = 0;
 
   const P = { x: 130, y: GROUND, vy: 0, w: 80, h: 80, jumps: 0, onGround: true, inv: 0, power: 0, squash: 0 };
@@ -333,6 +380,8 @@
     nextObs = 500;
     obstacles = []; items = []; particles = []; texts = [];
     raindrops = [];
+    shots = [];
+    energy = 100;
     goal = null;
     hugTimer = 0;
     lives = 3;
@@ -370,12 +419,33 @@
     if (P.vy < -380) P.vy = -380;
   }
 
+  // 아빠 존경 파워 발사!
+  const POWER_SHOUTS = ['아빠 존경 파워!', '아빠 최고!', '아빠 사랑해 빔!', '존경 에너지!'];
+  function fire() {
+    if (paused || state !== 'play' && state !== 'goal') return;
+    if (energy < SHOT_COST) {
+      addText('에너지 충전 중…', P.x + P.w / 2, P.y - P.h - 10, '#ffc2e2', 16, 0.7);
+      return;
+    }
+    energy -= SHOT_COST;
+    shotCount++;
+    shots.push({ x: P.x + P.w - 6, y: P.y - P.h / 2, life: 1.4, age: 0 });
+    sfx.fire();
+    burst(P.x + P.w - 4, P.y - P.h / 2, 6, '#ff9ad5', 150);
+    if (shotCount === 1 || Math.random() < 0.35) {
+      addText(pick(POWER_SHOUTS), P.x + P.w / 2 + 20, P.y - P.h - 12, '#ffd6ef', 22, 1);
+    }
+  }
+
   window.addEventListener('keydown', e => {
     if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) {
       e.preventDefault();
       if (e.repeat) return;
       if (state === 'title') { startGame(); return; }
       jump();
+    } else if (e.code === 'KeyX' || e.code === 'KeyF') {
+      e.preventDefault();
+      if (!e.repeat) fire();
     } else if (e.code === 'KeyP' || e.code === 'Escape') {
       togglePause();
     } else if (e.code === 'Enter') {
@@ -387,6 +457,9 @@
     if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) cutJump();
   });
   cv.addEventListener('pointerdown', e => { e.preventDefault(); jump(); });
+  const fireBtn = $('fireBtn'), fireFill = $('fireFill');
+  fireBtn.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); fire(); });
+  fireBtn.addEventListener('click', e => e.preventDefault());
   window.addEventListener('pointerup', cutJump);
   window.addEventListener('pointercancel', cutJump);
 
@@ -586,7 +659,7 @@
       if (overlap(hb, box)) {
         it.got = true;
         if (it.kind === 'star') {
-          stars++; score += 10; sfx.star();
+          stars++; score += 10; energy = Math.min(100, energy + 6); sfx.star();
           burst(it.x, it.y, 5, '#ffe066', 140);
         } else if (it.kind === 'heart') {
           lives = Math.min(5, lives + 1); sfx.heart();
@@ -599,6 +672,32 @@
       }
     }
     items = items.filter(it => !it.got && it.x > -40);
+
+    // 존경 파워 발사체
+    energy = Math.min(100, energy + ENERGY_REGEN * dt);
+    for (const sh of shots) {
+      sh.x += 760 * dt;
+      sh.age += dt;
+      sh.life -= dt;
+      if (Math.random() < 0.7) particles.push({ x: sh.x - 20, y: sh.y + rand(-22, 22), vx: -rand(80, 200), vy: rand(-30, 30), life: 0.35, max: 0.35, color: pick(['#ff9ad5', '#ffd6ef', '#ffe066']), size: rand(5, 10) });
+      const box = { x: sh.x - 24, y: sh.y - 38, w: 48, h: 76 };
+      for (const o of obstacles) {
+        if (o.dead) continue;
+        if (overlap(box, { x: o.x - o.w / 2, y: o.y, w: o.w, h: o.h })) {
+          o.dead = true;
+          o.vy = -520; o.vx = 260;
+          sh.life = 0;
+          score += 15;
+          sfx.boom();
+          shake = 4;
+          burst(o.x, o.y + o.h / 2, 10, '#ff9ad5', 240);
+          burst(o.x, o.y + o.h / 2, 4, null, 200, '💖');
+          addText('+15 처치!', o.x, o.y - 10, '#ffd6ef', 20);
+          break;
+        }
+      }
+    }
+    shots = shots.filter(sh => sh.life > 0 && sh.x < W + 60);
 
     // 비
     if (stage.rain) {
@@ -890,6 +989,16 @@
     }
     ctx.globalAlpha = 1;
 
+    // 존경 파워 게이지
+    ctx.fillStyle = 'rgba(0,0,0,.3)';
+    ctx.beginPath(); ctx.roundRect(14, 50, 150, 14, 7); ctx.fill();
+    ctx.fillStyle = energy >= SHOT_COST ? '#ff6fb5' : '#b9789a';
+    ctx.beginPath(); ctx.roundRect(14, 50, Math.max(14, 150 * energy / 100), 14, 7); ctx.fill();
+    ctx.font = 'bold 11px system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('💖 아빠 존경 파워', 20, 61);
+
     ctx.font = 'bold 22px system-ui, sans-serif';
     ctx.textAlign = 'right';
     ctx.lineWidth = 4;
@@ -939,6 +1048,16 @@
     for (const o of obstacles) {
       drawEmoji(o.d.e, o.x, o.y + o.h / 2, o.d.size, o.rot);
     }
+    for (const sh of shots) {
+      const pulse = 1 + Math.sin(sh.age * 30) * 0.08;
+      const g = ctx.createRadialGradient(sh.x, sh.y, 4, sh.x, sh.y, 44 * pulse);
+      g.addColorStop(0, 'rgba(255,255,255,.95)');
+      g.addColorStop(0.35, 'rgba(255,150,210,.85)');
+      g.addColorStop(1, 'rgba(255,80,160,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.ellipse(sh.x, sh.y, 40 * pulse, 44 * pulse, 0, 0, 7); ctx.fill();
+      drawEmoji('💖', sh.x, sh.y, 34 * pulse, Math.sin(sh.age * 12) * 0.2);
+    }
     drawGoal();
     if (state !== 'title') drawPlayer();
 
@@ -971,6 +1090,12 @@
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
     if (!paused) update(dt);
+    const showFire = (state === 'play' || state === 'goal') && !paused;
+    if (fireBtn.hidden === showFire) fireBtn.hidden = !showFire;
+    if (showFire) {
+      fireFill.style.height = energy.toFixed(0) + '%';
+      fireBtn.classList.toggle('ready', energy >= SHOT_COST);
+    }
     draw();
     requestAnimationFrame(loop);
   }
