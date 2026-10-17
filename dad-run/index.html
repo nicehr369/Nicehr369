@@ -58,9 +58,8 @@
   }
   canvas { display: block; width: 100%; height: 100%; }
   [hidden] { display: none !important; }
-  #fireBtn {
+  .padBtn {
     position: absolute;
-    right: 3%;
     bottom: 3%;
     opacity: .88;
     width: clamp(56px, 10%, 96px);
@@ -71,7 +70,7 @@
     color: #fff;
     font: inherit;
     font-weight: 800;
-    font-size: clamp(11px, 1.6vw, 16px);
+    font-size: clamp(10px, 1.5vw, 16px);
     line-height: 1.15;
     display: flex;
     flex-direction: column;
@@ -83,17 +82,20 @@
     text-shadow: 0 2px 3px rgba(0,0,0,.4);
     box-shadow: 0 4px 14px rgba(0,0,0,.3);
   }
+  #fireBtn { right: 3%; }
+  #crawlBtn { left: 3%; background: rgba(90, 200, 130, .35); }
+  #crawlBtn.held { background: rgba(90, 200, 130, .85); transform: scale(.94); }
   #fireBtn .fill {
     position: absolute;
     left: 0; right: 0; bottom: 0;
     background: linear-gradient(#ff9ad5, #ff4f9a);
     z-index: 0;
   }
-  #fireBtn span { position: relative; z-index: 1; }
-  #fireBtn span.big { font-size: 1.7em; }
+  .padBtn span { position: relative; z-index: 1; white-space: nowrap; letter-spacing: -.02em; }
+  .padBtn span.big { font-size: 1.7em; }
   #fireBtn.ready { animation: glow 1s ease-in-out infinite; }
   @keyframes glow { 50% { box-shadow: 0 0 22px 6px rgba(255,120,200,.85); } }
-  #fireBtn:active { transform: scale(.94); }
+  .padBtn:active { transform: scale(.94); }
   .overlay {
     position: absolute;
     inset: 0;
@@ -166,7 +168,10 @@
 
 <div id="wrap">
   <canvas id="game"></canvas>
-  <button id="fireBtn" hidden aria-label="아빠 존경 파워 발사">
+  <button id="crawlBtn" class="padBtn" hidden aria-label="누르고 있으면 엎드려 기어가기">
+    <span class="big">🐛</span><span>기어가기</span>
+  </button>
+  <button id="fireBtn" class="padBtn" hidden aria-label="아빠 존경 파워 발사">
     <div class="fill" id="fireFill"></div>
     <span class="big">💖</span><span>존경 파워</span>
   </button>
@@ -180,6 +185,7 @@
       막히면 <b>아빠 존경 파워</b>로 뿅! 💖</p>
     <button class="btn" id="startBtn">출발! 🏃</button>
     <p class="small" style="margin-top:.8em">점프: 화면 탭 · 스페이스 · ↑ &nbsp;|&nbsp; 공중에서 한 번 더 = 2단 점프<br>
+      🐛 기어가기: 왼쪽 아래 버튼을 누르고 있기 · ↓ 키 → 낮게 나는 적 밑으로 쏙!<br>
       💖 아빠 존경 파워 발사: 오른쪽 아래 버튼 · X 키 → 적을 물리쳐요!<br>
       ⭐ 별 모으기 · ❤️ 생명 +1 · 🍭 무적 사탕</p>
     <p class="small" id="bestText"></p>
@@ -372,6 +378,8 @@
   let time = 0;
 
   const P = { x: 130, y: GROUND, vy: 0, w: 80, h: 80, jumps: 0, onGround: true, inv: 0, power: 0, squash: 0 };
+  let crawlKey = false, crawlTouch = false, crawlHintShown = false;
+  const isCrawling = () => (crawlKey || crawlTouch) && P.onGround && (state === 'play' || state === 'goal');
 
   function resetStage() {
     stage = STAGES[stageIdx];
@@ -388,6 +396,7 @@
     stars = 0;
     score = stageStartScore;
     Object.assign(P, { y: GROUND, vy: 0, jumps: 0, onGround: true, inv: 0, power: 0 });
+    crawlHintShown = false;
     addText(stage.name, W / 2, H / 2 - 40, '#fff', 30, 2.2);
   }
 
@@ -429,7 +438,7 @@
     }
     energy -= SHOT_COST;
     shotCount++;
-    shots.push({ x: P.x + P.w - 6, y: P.y - P.h / 2, life: 1.4, age: 0 });
+    shots.push({ x: P.x + P.w - 6, y: P.y - (isCrawling() ? 26 : P.h / 2), life: 1.4, age: 0 });
     sfx.fire();
     burst(P.x + P.w - 4, P.y - P.h / 2, 6, '#ff9ad5', 150);
     if (shotCount === 1 || Math.random() < 0.35) {
@@ -443,6 +452,9 @@
       if (e.repeat) return;
       if (state === 'title') { startGame(); return; }
       jump();
+    } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+      e.preventDefault();
+      crawlKey = true;
     } else if (e.code === 'KeyX' || e.code === 'KeyF') {
       e.preventDefault();
       if (!e.repeat) fire();
@@ -455,11 +467,24 @@
   });
   window.addEventListener('keyup', e => {
     if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) cutJump();
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') crawlKey = false;
   });
   cv.addEventListener('pointerdown', e => { e.preventDefault(); jump(); });
   const fireBtn = $('fireBtn'), fireFill = $('fireFill');
   fireBtn.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); fire(); });
   fireBtn.addEventListener('click', e => e.preventDefault());
+  const crawlBtn = $('crawlBtn');
+  crawlBtn.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    crawlTouch = true;
+    crawlBtn.classList.add('held');
+    try { crawlBtn.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  const crawlUp = () => { crawlTouch = false; crawlBtn.classList.remove('held'); };
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => crawlBtn.addEventListener(ev, crawlUp));
+  crawlBtn.addEventListener('click', e => e.preventDefault());
+  crawlBtn.addEventListener('contextmenu', e => e.preventDefault());
+  window.addEventListener('blur', () => { crawlKey = false; crawlUp(); });
   window.addEventListener('pointerup', cutJump);
   window.addEventListener('pointercancel', cutJump);
 
@@ -519,6 +544,10 @@
       rot: 0, dead: false,
     };
     obstacles.push(o);
+    if (!crawlHintShown && d.air > 0 && d.air < 100) {
+      crawlHintShown = true;
+      addText('🐛 기어가기로 밑으로 쏙!', W / 2, 150, '#c8ffd8', 22, 2);
+    }
 
     // 장애물 사이에 별/아이템 배치
     const gapX = W + 40 + rand(160, 240);
@@ -550,6 +579,7 @@
 
   // ---------- 업데이트 ----------
   function hitbox() {
+    if (isCrawling()) return { x: P.x + 12, y: P.y - 38, w: P.w - 24, h: 34 };
     return { x: P.x + 18, y: P.y - P.h + 14, w: P.w - 36, h: P.h - 18 };
   }
   function overlap(a, b) {
@@ -612,6 +642,7 @@
 
     // 플레이어 물리
     P.vy += GRAVITY * dt;
+    if ((crawlKey || crawlTouch) && !P.onGround) P.vy += GRAVITY * 1.5 * dt; // 공중에서 ↓ = 빨리 내려오기
     P.y += P.vy * dt;
     if (P.y >= GROUND) {
       if (!P.onGround) { P.squash = 0.18; }
@@ -888,11 +919,13 @@
   function drawPlayer() {
     if (!kidImg.complete || !kidImg.naturalWidth) return;
     if (P.inv > 0 && Math.floor(P.inv * 12) % 2 === 0) return;
-    const running = P.onGround && (state === 'play' || state === 'goal');
-    const bob = running ? Math.abs(Math.sin(time * 14)) * 6 : 0;
+    const crawling = isCrawling();
+    const running = P.onGround && (state === 'play' || state === 'goal') && !crawling;
+    const bob = running ? Math.abs(Math.sin(time * 14)) * 6 : crawling ? Math.abs(Math.sin(time * 10)) * 2 : 0;
     const tilt = running ? Math.sin(time * 14) * 0.06 : P.onGround ? 0 : Math.max(-0.25, Math.min(0.25, P.vy / 3000));
     const sq = P.squash > 0 ? P.squash : 0;
-    const sx = 1 + sq * 0.8, sy = 1 - sq * 0.8;
+    let sx = 1 + sq * 0.8, sy = 1 - sq * 0.8;
+    if (crawling) { sx *= 1.18; sy *= 0.52; }
 
     // 그림자
     const hFrac = Math.max(0, 1 - (GROUND - P.y) / 250);
@@ -903,7 +936,7 @@
 
     ctx.save();
     ctx.translate(P.x + P.w / 2, P.y - bob);
-    ctx.rotate(tilt);
+    ctx.rotate(crawling ? 0.1 + Math.sin(time * 10) * 0.04 : tilt);
     ctx.scale(sx, sy);
     if (P.power > 0) {
       ctx.shadowColor = `hsl(${(time * 400) % 360},100%,60%)`;
@@ -912,6 +945,14 @@
     ctx.drawImage(kidImg, -P.w / 2 - 4, -P.h - 6, P.w + 8, P.h + 8);
     ctx.restore();
 
+    // 기어가는 손과 무릎
+    if (crawling) {
+      const k = Math.sin(time * 10) * 8;
+      ctx.fillStyle = '#f2c9a5';
+      ctx.beginPath(); ctx.ellipse(P.x + P.w - 8 + k, GROUND - 4, 8, 5, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = '#5a4a8a';
+      ctx.beginPath(); ctx.ellipse(P.x + 14 - k, GROUND - 4, 10, 5, 0, 0, 7); ctx.fill();
+    }
     // 달리는 발
     if (running) {
       ctx.fillStyle = '#5a4a8a';
@@ -1091,7 +1132,7 @@
     last = now;
     if (!paused) update(dt);
     const showFire = (state === 'play' || state === 'goal') && !paused;
-    if (fireBtn.hidden === showFire) fireBtn.hidden = !showFire;
+    if (fireBtn.hidden === showFire) { fireBtn.hidden = !showFire; crawlBtn.hidden = !showFire; if (!showFire) crawlUp(); }
     if (showFire) {
       fireFill.style.height = energy.toFixed(0) + '%';
       fireBtn.classList.toggle('ready', energy >= SHOT_COST);
