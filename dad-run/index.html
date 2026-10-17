@@ -93,6 +93,7 @@
   }
   .padBtn span { position: relative; z-index: 1; white-space: nowrap; letter-spacing: -.02em; }
   .padBtn span.big { font-size: 1.7em; }
+  #fireBtn.empty { opacity: .45; filter: grayscale(.7); }
   #fireBtn.ready { animation: glow 1s ease-in-out infinite; }
   @keyframes glow { 50% { box-shadow: 0 0 22px 6px rgba(255,120,200,.85); } }
   .padBtn:active { transform: scale(.94); }
@@ -173,7 +174,7 @@
   </button>
   <button id="fireBtn" class="padBtn" hidden aria-label="아빠 존경 파워 발사">
     <div class="fill" id="fireFill"></div>
-    <span class="big">💖</span><span>존경 파워</span>
+    <span class="big">💖</span><span id="fireLabel">존경 파워 ×5</span>
   </button>
 
   <div class="overlay show" id="titleScreen">
@@ -186,7 +187,7 @@
     <button class="btn" id="startBtn">출발! 🏃</button>
     <p class="small" style="margin-top:.8em">점프: 화면 탭 · 스페이스 · ↑ &nbsp;|&nbsp; 공중에서 한 번 더 = 2단 점프<br>
       🐛 기어가기: 오른쪽 아래 초록 버튼을 누르고 있기 · ↓ 키 → 낮게 나는 적 밑으로 쏙!<br>
-      💖 아빠 존경 파워 발사: 오른쪽 아래 버튼 · X 키 → 적을 물리쳐요!<br>
+      💖 아빠 존경 파워 발사: 오른쪽 아래 버튼 · X 키 → 적을 물리쳐요! (한 단계에 5번까지)<br>
       ⭐ 별 모으기 · ❤️ 생명 +1 · 🍭 무적 사탕</p>
     <p class="small" id="bestText"></p>
   </div>
@@ -373,8 +374,8 @@
   let nextObs = 0;
   let obstacles = [], items = [], particles = [], texts = [], raindrops = [];
   let goal = null, hugTimer = 0, shake = 0;
-  let energy = 100, shots = [], shotCount = 0;
-  const SHOT_COST = 25, ENERGY_REGEN = 11;
+  const MAX_SHOTS = 5; // 한 단계에 쓸 수 있는 존경 파워 횟수
+  let shotsLeft = MAX_SHOTS, shots = [], shotCount = 0;
   let time = 0;
 
   const P = { x: 130, y: GROUND, vy: 0, w: 80, h: 80, jumps: 0, onGround: true, inv: 0, power: 0, squash: 0 };
@@ -389,7 +390,7 @@
     obstacles = []; items = []; particles = []; texts = [];
     raindrops = [];
     shots = [];
-    energy = 100;
+    shotsLeft = MAX_SHOTS;
     goal = null;
     hugTimer = 0;
     lives = 3;
@@ -432,11 +433,11 @@
   const POWER_SHOUTS = ['아빠 존경 파워!', '아빠 최고!', '아빠 사랑해 빔!', '존경 에너지!'];
   function fire() {
     if (paused || state !== 'play' && state !== 'goal') return;
-    if (energy < SHOT_COST) {
-      addText('에너지 충전 중…', P.x + P.w / 2, P.y - P.h - 10, '#ffc2e2', 16, 0.7);
+    if (shotsLeft <= 0) {
+      addText('존경 파워를 다 썼어요!', P.x + P.w / 2, P.y - P.h - 10, '#ffc2e2', 16, 0.8);
       return;
     }
-    energy -= SHOT_COST;
+    shotsLeft--;
     shotCount++;
     shots.push({ x: P.x + P.w - 6, y: P.y - (isCrawling() ? 26 : P.h / 2), life: 1.4, age: 0 });
     sfx.fire();
@@ -470,7 +471,7 @@
     if (e.code === 'ArrowDown' || e.code === 'KeyS') crawlKey = false;
   });
   cv.addEventListener('pointerdown', e => { e.preventDefault(); jump(); });
-  const fireBtn = $('fireBtn'), fireFill = $('fireFill');
+  const fireBtn = $('fireBtn'), fireFill = $('fireFill'), fireLabel = $('fireLabel');
   fireBtn.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); fire(); });
   fireBtn.addEventListener('click', e => e.preventDefault());
   const crawlBtn = $('crawlBtn');
@@ -690,7 +691,7 @@
       if (overlap(hb, box)) {
         it.got = true;
         if (it.kind === 'star') {
-          stars++; score += 10; energy = Math.min(100, energy + 6); sfx.star();
+          stars++; score += 10; sfx.star();
           burst(it.x, it.y, 5, '#ffe066', 140);
         } else if (it.kind === 'heart') {
           lives = Math.min(5, lives + 1); sfx.heart();
@@ -705,7 +706,6 @@
     items = items.filter(it => !it.got && it.x > -40);
 
     // 존경 파워 발사체
-    energy = Math.min(100, energy + ENERGY_REGEN * dt);
     for (const sh of shots) {
       sh.x += 760 * dt;
       sh.age += dt;
@@ -1030,15 +1030,19 @@
     }
     ctx.globalAlpha = 1;
 
-    // 존경 파워 게이지
-    ctx.fillStyle = 'rgba(0,0,0,.3)';
-    ctx.beginPath(); ctx.roundRect(14, 50, 150, 14, 7); ctx.fill();
-    ctx.fillStyle = energy >= SHOT_COST ? '#ff6fb5' : '#b9789a';
-    ctx.beginPath(); ctx.roundRect(14, 50, Math.max(14, 150 * energy / 100), 14, 7); ctx.fill();
+    // 남은 존경 파워 횟수
     ctx.font = 'bold 11px system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
     ctx.textAlign = 'left';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,.35)';
     ctx.fillStyle = '#fff';
-    ctx.fillText('💖 아빠 존경 파워', 20, 61);
+    ctx.strokeText('존경 파워', 14, 62);
+    ctx.fillText('존경 파워', 14, 62);
+    for (let i = 0; i < MAX_SHOTS; i++) {
+      ctx.globalAlpha = i < shotsLeft ? 1 : 0.22;
+      drawEmoji('💖', 82 + i * 20, 58, 17);
+    }
+    ctx.globalAlpha = 1;
 
     ctx.font = 'bold 22px system-ui, sans-serif';
     ctx.textAlign = 'right';
@@ -1134,8 +1138,11 @@
     const showFire = (state === 'play' || state === 'goal') && !paused;
     if (fireBtn.hidden === showFire) { fireBtn.hidden = !showFire; crawlBtn.hidden = !showFire; if (!showFire) crawlUp(); }
     if (showFire) {
-      fireFill.style.height = energy.toFixed(0) + '%';
-      fireBtn.classList.toggle('ready', energy >= SHOT_COST);
+      fireFill.style.height = (shotsLeft / MAX_SHOTS * 100).toFixed(0) + '%';
+      fireBtn.classList.toggle('ready', shotsLeft > 0);
+      fireBtn.classList.toggle('empty', shotsLeft <= 0);
+      const label = `존경 파워 ×${shotsLeft}`;
+      if (fireLabel.textContent !== label) fireLabel.textContent = label;
     }
     draw();
     requestAnimationFrame(loop);
