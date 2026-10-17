@@ -83,7 +83,7 @@
     box-shadow: 0 4px 14px rgba(0,0,0,.3);
   }
   #fireBtn { right: 3%; }
-  #crawlBtn { left: 3%; background: rgba(90, 200, 130, .35); }
+  #crawlBtn { right: calc(5% + clamp(56px, 10%, 96px)); background: rgba(90, 200, 130, .35); }
   #crawlBtn.held { background: rgba(90, 200, 130, .85); transform: scale(.94); }
   #fireBtn .fill {
     position: absolute;
@@ -185,7 +185,7 @@
       막히면 <b>아빠 존경 파워</b>로 뿅! 💖</p>
     <button class="btn" id="startBtn">출발! 🏃</button>
     <p class="small" style="margin-top:.8em">점프: 화면 탭 · 스페이스 · ↑ &nbsp;|&nbsp; 공중에서 한 번 더 = 2단 점프<br>
-      🐛 기어가기: 왼쪽 아래 버튼을 누르고 있기 · ↓ 키 → 낮게 나는 적 밑으로 쏙!<br>
+      🐛 기어가기: 오른쪽 아래 초록 버튼을 누르고 있기 · ↓ 키 → 낮게 나는 적 밑으로 쏙!<br>
       💖 아빠 존경 파워 발사: 오른쪽 아래 버튼 · X 키 → 적을 물리쳐요!<br>
       ⭐ 별 모으기 · ❤️ 생명 +1 · 🍭 무적 사탕</p>
     <p class="small" id="bestText"></p>
